@@ -1,0 +1,53 @@
+pipeline {
+  agent any
+  stages {
+    stage('buildFrontEnd') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject() {
+              openshift.selector("bc", "chetan").startBuild("--wait=true", "--follow")
+            }
+          }
+        }
+      }
+    }
+    stage('deployFrontEnd') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject() {
+              openshift.selector("dc", "chetan").rollout().latest()
+              openshift.selector("dc", "chetan").scale("--replicas=1")
+              }
+          }
+        }
+      }
+    }
+    stage('promoteToProd') {
+      steps {
+        script {
+          timeout(time: 20, unit: 'MINUTES') {
+            input message: "Promote to PROD?", ok: "Promote"
+          }
+          openshift.withCluster() {
+            openshift.withProject() {
+              openshift.tag("chetan:latest", "chetan:prod")
+            }
+          }
+        }
+      }
+    }
+    stage('scaleUp') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject() {
+              openshift.selector("dc", "chetan-prod").scale("--replicas=2")
+              }
+          }
+        }
+      }
+    }
+  }
+}
